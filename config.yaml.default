@@ -8,7 +8,7 @@ RocketChat:
   SSL: true # If the rocketchat server has SSL on the above hostname.
 OpenAI:
   HostName: api.openai.com # OpenAI hostname
-  ApiToken: verysecret-apitoken
+  ApiToken:  #If you would like to use assitant API provide ID otherwise do nothing. When You Enter Assistant API MODEL AND PrePrompt read from OPEN AI Assistance UI. What you declare below ignored. 
   CompletionEndpoint: v1/chat/completions # Chat completions endpoint
   ModerationEndpoint: v1/moderations # Moderations endpoint
 
@@ -34,7 +34,7 @@ OpenAI:
 
   # This is the first message that is sent to the bot as a "system" message, which can be used to give a character to it
   # If empty, the system message is omitted. See: https://platform.openai.com/docs/guides/chat/introduction
-  PrePrompt: "You are Victor, a cowboy-themed robot and use as much cowboy-slang as you can do."
+  PrePrompt: "You are Consultant. Help visitors with their questions."
 
   # If enabled, the bot will send the user id of the user that sent the message to OpenAI.
   # See: https://platform.openai.com/docs/api-reference/chat/create#chat/create-user
