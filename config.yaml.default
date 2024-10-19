@@ -9,6 +9,8 @@ RocketChat:
 OpenAI:
   HostName: api.openai.com # OpenAI hostname
   ApiToken:  #If you would like to use assitant API provide ID otherwise do nothing. When You Enter Assistant API MODEL AND PrePrompt read from OPEN AI Assistance UI. What you declare below ignored. 
+  AssistantID:
+  AssistanceEndpoint: v1/assistants # Chat assistant
   CompletionEndpoint: v1/chat/completions # Chat completions endpoint
   ModerationEndpoint: v1/moderations # Moderations endpoint
 
