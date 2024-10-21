@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 
 	"RocketAssist/openai"
@@ -270,12 +271,20 @@ func useCompletionAPI(rocketmsg rocket.Message, oa *openai.OpenAI, hist *History
 	return sendResponseToUser(rocketmsg, cresp.Choices[0].Message.Content)
 }
 
+// Function to remove references like
+func removeReferences(input string) string {
+	// Define a regex pattern to match 【...】
+	re := regexp.MustCompile(`【.*?†.*?】`)
+	// Replace all occurrences of the pattern with an empty string
+	return re.ReplaceAllString(input, "")
+}
+
 // Helper to send response back to the user
 func sendResponseToUser(rocketmsg rocket.Message, responseText string) error {
 	rocketmsg.SetIsTyping(true)
 	defer rocketmsg.SetIsTyping(false)
-
-	_, err := rocketmsg.Reply(fmt.Sprintf("@%s %s", rocketmsg.UserName, responseText))
+	cleanedText := removeReferences(responseText)
+	_, err := rocketmsg.Reply(fmt.Sprintf("@%s %s", rocketmsg.UserName, cleanedText))
 	if err != nil {
 		return fmt.Errorf("cannot send reply to rocketchat: %w", err)
 	}
