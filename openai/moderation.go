@@ -21,7 +21,7 @@ type Result struct {
 		HarassmentThreatening bool `json:"harassment/threatening"`
 		SelfHarm              bool `json:"self-harm"`
 		SelfHarmIntent        bool `json:"self-harm/intent"`
-		SelfHarmInstructions  bool `json:"self-harm/intstructions"`
+		SelfHarmInstructions  bool `json:"self-harm/instructions"`
 		Sexual                bool `json:"sexual"`
 		SexualMinors          bool `json:"sexual/minors"`
 		Violence              bool `json:"violence"`
@@ -34,7 +34,7 @@ type Result struct {
 		HarassmentThreatening float64 `json:"harassment/threatening"`
 		SelfHarm              float64 `json:"self-harm"`
 		SelfHarmIntent        float64 `json:"self-harm/intent"`
-		SelfHarmInstructions  float64 `json:"self-harm/intstructions"`
+		SelfHarmInstructions  float64 `json:"self-harm/instructions"`
 		Sexual                float64 `json:"sexual"`
 		SexualMinors          float64 `json:"sexual/minors"`
 		Violence              float64 `json:"violence"`
