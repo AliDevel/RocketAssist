@@ -135,79 +135,83 @@ func (rock *RocketCon) init() error {
 }
 
 func (rock *RocketCon) run() {
-	log.WithField("message", "Method").Debug("run")
-
-	// Set some websocket tunables
 	const socketreadsizelimit = 65536
-	const pingtime = 120 * time.Second
 	const timeout = 125 * time.Second
-	log.WithField("message", "Method").Debug("rock.getWsUrl")
-	// Define Websocket URL
-	wsURL := rock.getWsURL()
 
-	// Init websocket
+	ws, err := rock.connectWebSocket()
+	if err != nil {
+		close(rock.quit)
+		return
+	}
+	defer ws.Close()
+
+	rock.setupWebSocket(ws, socketreadsizelimit, timeout)
+
+	go rock.idGenerator()
+	go rock.manageResults()
+	go rock.writePump(ws)
+
+	rock.readPump(ws, timeout)
+	close(rock.quit)
+	time.Sleep(100 * time.Millisecond) // ensure quit channel is closed before returning
+}
+
+func (rock *RocketCon) connectWebSocket() (*websocket.Conn, error) {
+	wsURL := rock.getWsURL()
 	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		log.WithError(err).WithField("wsURL", wsURL).Error("Cannot initiate websocket")
-		close(rock.quit)
+		return nil, err
 	}
-	log.WithField("message", "Method").Debug("ws.close")
-	defer ws.Close()
+	return ws, nil
+}
 
-	// Configure Websocket using Tunables
-	ws.SetReadLimit(socketreadsizelimit)
+func (rock *RocketCon) setupWebSocket(ws *websocket.Conn, readLimit int64, timeout time.Duration) {
+	ws.SetReadLimit(readLimit)
 	ws.SetReadDeadline(time.Now().Add(timeout))
-	log.WithField("message", "Method").Debug("BeforePong")
 	ws.SetPongHandler(func(string) error {
 		ws.SetReadDeadline(time.Now().Add(timeout))
 		return nil
 	})
+}
 
-	tick := time.NewTicker(pingtime)
-	defer tick.Stop()
-	log.WithField("message", "Method").Debug("Tickstop")
+func (rock *RocketCon) idGenerator() {
+	for i := uint64(0); ; i++ {
+		i++
+		rock.nextId <- fmt.Sprintf("%d", i)
+	}
+}
 
-	// Manage Method/Subscription Ids
-	go func() {
-		for i := uint64(0); ; i++ {
-			i++
-			rock.nextId <- fmt.Sprintf("%d", i)
+func (rock *RocketCon) manageResults() {
+	for {
+		select {
+		case addition := <-rock.resultsAppend:
+			rock.resultsMutex.Lock()
+			rock.results[addition.string] = addition.channel
+			rock.resultsMutex.Unlock()
+		case remove := <-rock.resultsDel:
+			rock.resultsMutex.Lock()
+			delete(rock.results, remove)
+			rock.resultsMutex.Unlock()
 		}
-	}()
-	log.WithField("message", "Method").Debug("Subscription")
+	}
+}
 
-	// Manage Results map
-	go func() {
-		for {
-			select {
-			case addition := <-rock.resultsAppend:
-				rock.resultsMutex.Lock()
-				rock.results[addition.string] = addition.channel
-				rock.resultsMutex.Unlock()
-			case remove := <-rock.resultsDel:
-				rock.resultsMutex.Lock()
-				delete(rock.results, remove)
-				rock.resultsMutex.Unlock()
-			}
+func (rock *RocketCon) writePump(ws *websocket.Conn) {
+	for msg := range rock.send {
+		packet, err := json.Marshal(msg)
+		if err != nil {
+			log.WithError(err).Error("Cannot marshal websocket message.")
+			continue
 		}
-	}()
-	log.WithField("message", "Method").Debug("ManageResult MAp")
-
-	// Send Thread
-	go func() {
-		for {
-			msg := <-rock.send
-			packet, err := json.Marshal(msg)
-			err = ws.WriteMessage(websocket.TextMessage, packet)
-			if err != nil {
-				log.WithError(err).WithField("packet", packet).Error("Cannot write to websocket.")
-				return
-			}
+		if err = ws.WriteMessage(websocket.TextMessage, packet); err != nil {
+			log.WithError(err).WithField("packet", packet).Error("Cannot write to websocket.")
+			return
 		}
-	}()
-	log.WithField("message", "Method").Debug("1")
+	}
+}
 
-	// Read Thread
+func (rock *RocketCon) readPump(ws *websocket.Conn, timeout time.Duration) {
 	for {
 		_, raw, err := ws.ReadMessage()
 		ws.SetReadDeadline(time.Now().Add(timeout))
@@ -218,8 +222,7 @@ func (rock *RocketCon) run() {
 		}
 
 		var pack map[string]interface{}
-		err = json.Unmarshal(raw, &pack)
-		if err != nil {
+		if err = json.Unmarshal(raw, &pack); err != nil {
 			log.WithError(err).WithField("raw", raw).Warn("Cannot unmarshal data read from websocket.")
 			continue
 		}
@@ -233,23 +236,16 @@ func (rock *RocketCon) run() {
 				} else {
 					log.Warn("Session is nil or not a string")
 				}
-				log.WithField("message", "Method").Debug("4")
 			case "result":
 				rock.resultsMutex.RLock()
 				if channel, ok := rock.results[pack["id"].(string)]; ok {
-					// We want to unlock the resultsMutex before the following blocking operation.
 					rock.resultsMutex.RUnlock()
 					channel <- pack
-					log.WithField("message", "Method").Debug("5")
 				} else {
 					rock.resultsMutex.RUnlock()
-					log.WithField("message", "Method").Debug("6")
 				}
-				log.WithField("message", "Method").Debug("7")
 				rock.resultsDel <- pack["id"].(string)
-				log.WithField("message", "Method").Debug("8")
 			case "added":
-				log.WithField("message", "Method").Debug("9")
 				switch pack["collection"].(string) {
 				case "users":
 					break
@@ -257,66 +253,44 @@ func (rock *RocketCon) run() {
 					log.WithField("pack", pack).Trace("Ignored incoming added msg.")
 				}
 			case "updated":
-				break
+				// intentionally ignored
 			case "changed":
-				log.WithField("message", "Method").Debug("11")
-
-				// Check if it exists and is not nil
-
 				obj := pack["fields"].(map[string]interface{})["args"].([]interface{})
-				log.WithField("message", "Method").Debug("12")
 
 				switch pack["collection"].(string) {
 				case "stream-notify-user":
-					log.WithField("message", "Method").Debug("13")
 					switch obj[0].(string) {
 					case "inserted":
-
-						log.WithField("message", "Method").Debug("14")
-						log.WithField("message", "Method").Debug(obj[1])
 						id := obj[1].(map[string]interface{})["rid"].(string)
 						name := obj[1].(map[string]interface{})["fname"].(string)
-						log.WithField("message", "Method").Debug("Ok? here")
 						rock.channels[id] = name
 						rock.subscribeRoom(id)
-						log.WithField("message", "Method").Debug("After subsription")
 					}
 				case "stream-room-messages":
 					for _, val := range obj {
-						log.WithField("message", "Method").Debug("15")
 						message := rock.handleMessageObject(val.(map[string]interface{}))
-						log.WithField("message", "Method").Debug("16")
-						log.WithField("Method", "message").Debug(message)
 						if message.IsNew {
-							log.WithField("message", "Stream").Debug("Potential trouble")
 							select {
 							case rock.newMessages <- message:
-								break
 							default:
 							}
 						} else {
 							select {
 							case rock.messages <- message:
-								break
 							default:
 							}
 						}
 					}
 				}
 			case "ready":
-				break
+				// ignore
 			case "ping":
-				pong := map[string]string{
-					"msg": "pong",
-				}
-				rock.send <- pong
+				rock.send <- map[string]string{"msg": "pong"}
 			default:
 				log.WithField("raw", string(raw)).Trace("Ping.")
 			}
 		}
 	}
-	close(rock.quit)
-	time.Sleep(100 * time.Millisecond) // Ugly hack to make sure rock.quit is closed before we return
 }
 
 func (rock *RocketCon) generateId() string {
