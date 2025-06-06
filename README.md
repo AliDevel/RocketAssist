@@ -2,6 +2,8 @@
 
 RocketAssist is an intelligent chatbot designed for seamless integration with Rocket.Chat, leveraging the power of OpenAI's APIs to deliver dynamic and meaningful conversations. Written in Go, this chatbot can be customized to fit a wide range of use cases by offering flexibility in prompts and responses. Whether you need a conversational assistant or an automated responder, RocketAssist is equipped to meet your needs.
 
+See `RocketBotpy/README.md` for instructions on running the Python version.
+
 Additionally, RocketAssist offers advanced functionality when using OpenAI’s Assistance API, allowing it to read and process data from files. This feature provides users with enhanced flexibility, enabling the bot to access stored knowledge and respond based on information in external files. This ensures that the bot answers precisely according to your business's needs and requirements.
 ## Features
 Rocket.Chat Integration: Seamlessly integrates with Rocket.Chat to respond to user inputs in real-time.
