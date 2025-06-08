@@ -159,39 +159,7 @@ func (o *OpenAI) Moderation(mReq *ModerationRequest) (*ModerationResponse, error
 	return &mResp, nil
 }
 
-func (o *OpenAI) request(url string, request interface{}, oaResponse interface{}) error {
-	data, err := json.Marshal(request)
-	if err != nil {
-		return fmt.Errorf("cannot marshal request body: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
-	if err != nil {
-		return fmt.Errorf("cannot create new request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", o.ApiToken))
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("cannot perform request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return parseError(resp, oaResponse)
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(oaResponse)
-	if err != nil {
-		return fmt.Errorf("cannot parse response body: %w", err)
-	}
-
-	return nil
-}
-
-// Reusable request function for POST and GET
-func (o *OpenAI) requestAPI(method, url string, request interface{}, oaResponse interface{}) error {
+func (o *OpenAI) doRequest(method, url string, request interface{}, oaResponse interface{}, extraHeaders map[string]string) error {
 	var req *http.Request
 	var err error
 
@@ -211,24 +179,37 @@ func (o *OpenAI) requestAPI(method, url string, request interface{}, oaResponse 
 
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", o.ApiToken))
+
 	req.Header.Set("OpenAI-Beta", "assistants=v2")
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("cannot perform request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("received non-200 response: %d", resp.StatusCode)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("received non-2xx response: %d", resp.StatusCode)
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(oaResponse)
-	if err != nil {
-		return fmt.Errorf("cannot parse response body: %w", err)
+	if oaResponse != nil {
+		if err = json.NewDecoder(resp.Body).Decode(oaResponse); err != nil {
+			return fmt.Errorf("cannot parse response body: %w", err)
+		}
 	}
-
 	return nil
+}
+
+func (o *OpenAI) request(url string, request interface{}, oaResponse interface{}) error {
+	return o.doRequest("POST", url, request, oaResponse, nil)
+}
+
+// Reusable request function for POST and GET
+func (o *OpenAI) requestAPI(method, url string, request interface{}, oaResponse interface{}) error {
+	headers := map[string]string{"OpenAI-Beta": "assistants=v2"}
+	return o.doRequest(method, url, request, oaResponse, headers)
 }
 
 func (o *OpenAI) NewCompletionRequest(messages []Message, user string) *CompletionRequest {
