@@ -179,22 +179,19 @@ func (o *OpenAI) doRequest(method, url string, request interface{}, oaResponse i
 
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", o.ApiToken))
-	for k, v := range extraHeaders {
-		req.Header.Set(k, v)
-	}
 
-	client := &http.Client{}
+	req.Header.Set("OpenAI-Beta", "assistants=v2")
+	client := &http.Client{Timeout: 30 * time.Second}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("cannot perform request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		if oaResponse != nil {
-			return parseError(resp, oaResponse)
-		}
-		return fmt.Errorf("received non-200 response: %d", resp.StatusCode)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("received non-2xx response: %d", resp.StatusCode)
 	}
 
 	if oaResponse != nil {

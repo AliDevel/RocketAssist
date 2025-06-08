@@ -47,8 +47,11 @@ func (h *History) GetAsString(place string) string {
 			ret += fmt.Sprintf("\n%s", m.Content)
 		}
 	}
-	// @todo cut so it won't be longer than maxLength
-	return strings.TrimSpace(ret)
+	ret = strings.TrimSpace(ret)
+	if h.MaxLength > 0 && len(ret) > h.MaxLength {
+		ret = ret[len(ret)-h.MaxLength:]
+	}
+	return ret
 }
 
 func (h *History) AsOpenAIMessages(place string) []openai.Message {
